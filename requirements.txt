@@ -1,0 +1,9 @@
+Generated using pipreqs
+docx==0.2.4
+docx2txt==0.8
+nicegui==1.4.23
+nltk==3.8.1
+openpyxl==3.1.2
+pandas==2.2.2
+PyPDF2==3.0.1
+scikit_learn==1.4.2
