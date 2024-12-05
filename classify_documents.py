@@ -56,6 +56,3 @@ def classify_document(document):
 # Classify each document in the test set
 for document in X_test:
     classify_document(document)
-
-
-

@@ -2,7 +2,7 @@ from flag_FAR_clauses import annotate_contract
 import tkinter
 from tkinter import filedialog
 from contract_to_txt import convert_to_txt, txt_to_docx
-from flag_problem_language import _flag_problem_language
+from flag_problem_language import flag_problem_language
 from classify_documents import classify_document
 from nltk import data as nltk
 from pathlib import Path
@@ -29,7 +29,7 @@ save_path = filedialog.asksaveasfilename()
 
 # clean docx and annotate it
 convert_to_txt(contract_in)
-_flag_problem_language(tnc_matrix)
+flag_problem_language(tnc_matrix)
 back_to_docx = 'flagged_contract_to_txt.txt'
 file_to_highlight = 'flagged_contract_to_docx.docx'
 txt_to_docx(back_to_docx, file_to_highlight)

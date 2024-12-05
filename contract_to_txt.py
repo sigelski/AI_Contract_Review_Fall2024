@@ -1,44 +1,57 @@
 import docx2txt
 from docx import Document
 from PyPDF2 import PdfReader
+import re
 
 # Function to process and clean the content of a DOCX file
-def _clean_docx(docx_path):
-    # Extract text from the DOCX file
+def _clean_docx(docx_path, output_path="contract_to_txt_cleaned.txt"):
+    """
+    Clean and enhance text extracted from a DOCX file.
+    """
+    # Extract text from DOCX
     raw_text = docx2txt.process(docx_path)
     
-    # Remove leading and trailing white spaces from each line
-    lines = raw_text.strip().split('\n')
-    cleaned_lines = [line.strip() for line in lines]
+    # Remove unwanted spaces and normalize
+    cleaned_text = '\n'.join([line.strip() for line in raw_text.splitlines() if line.strip()])
     
-    # Remove empty lines
-    cleaned_lines = [line for line in cleaned_lines if line]
+    # Correct common OCR artifacts (if any)
+    cleaned_text = re.sub(r'\bi\b', 'I', cleaned_text)
+    cleaned_text = re.sub(r'\b1\b', 'I', cleaned_text)
     
-    # Join the lines back
-    cleaned_text = '\n'.join(cleaned_lines)
-
-    with open('contract_to_txt.txt', 'w', encoding="utf-8") as file:
+    # Save to output
+    with open(output_path, 'w', encoding='utf-8') as file:
         file.write(cleaned_text)
     
 
 # Function to process and clean the content of a PDF file
-def _clean_pdf(pdf_path):
-    pdf_file_obj = open(pdf_path, 'rb')
-
-    pdf_reader = PdfReader(pdf_file_obj)
-
-    page_count = len(pdf_reader.pages)
-
-    page_obj = pdf_reader.pages[page_count - 1]
-
-    pdf_text = ''
-
-    for i in range(page_count - 1):
-        page_obj = pdf_reader.pages[i]
-        pdf_text += (page_obj.extract_text())
-
-    with open('contract_to_txt.txt', 'w', encoding="utf-8") as file:
-        file.write(pdf_text)
+def _clean_pdf(pdf_path, output_path="contract_to_txt_cleaned.txt"):
+    """
+    Clean and enhance text extracted from a PDF file.
+    """
+    try:
+        # Extract text using PyPDF2
+        pdf_reader = PdfReader(pdf_path)
+        extracted_text = ''
+        
+        for page in pdf_reader.pages:
+            extracted_text += page.extract_text()
+        
+        # Fallback to OCR if PDF extraction fails
+        if not extracted_text.strip():
+            print("No text extracted; switching to OCR...")
+            extracted_text = perform_ocr_on_pdf(pdf_path)
+        
+        # Clean the extracted text
+        cleaned_text = '\n'.join([line.strip() for line in extracted_text.splitlines() if line.strip()])
+        
+        # Save to output
+        with open(output_path, 'w', encoding='utf-8') as file:
+            file.write(cleaned_text)
+        return cleaned_text
+        
+    except Exception as e:
+        print(f"Error in enhanced_clean_pdf: {e}")
+        return None
 
 # Function to convert a txt file to docx file
 def txt_to_docx(txt_filepath, cleaned_docx_filepath):
@@ -64,5 +77,3 @@ def convert_to_txt(contract_in):
         _clean_docx(contract_in)
     else:
         return ('Error: unexpected file type')
-
-
