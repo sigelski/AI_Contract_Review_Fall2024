@@ -1,11 +1,11 @@
 import sys
 import os
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QPushButton,
-    QTextEdit, QVBoxLayout, QHBoxLayout, QFileDialog,
-    QMessageBox, QProgressBar
+    QApplication, QWidget, QLabel, QPushButton, QTextEdit,
+    QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox,
+    QProgressBar, QMenuBar, QAction
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSettings
 from PyQt5.QtGui import QIcon, QPixmap, QFont
 import qtawesome as qta
 
@@ -14,8 +14,9 @@ from contract_to_txt import convert_to_txt, txt_to_docx
 from flag_FAR_clauses import annotate_contract
 from flag_problem_language import flag_problem_language
 from docx import Document
-
 import nltk
+
+# Ensure NLTK data path is set correctly
 script_dir = os.path.dirname(os.path.abspath(__file__))
 nltk_data_dir = os.path.join(script_dir, 'supplementary_files', 'nltk_data')
 nltk.data.path.append(nltk_data_dir)
@@ -23,6 +24,7 @@ nltk.data.path.append(nltk_data_dir)
 # Defines paths to supplementary files
 FAR_CLAUSE_MATRIX_PATH = os.path.join('supplementary_files', '2023-03-20_FAR Matrix.xls')
 TNC_MATRIX_PATH = os.path.join('supplementary_files', 'Contract Ts&Cs Matrix.xlsm')
+
 
 class Worker(QThread):
     progress_update = pyqtSignal(int)
@@ -36,53 +38,70 @@ class Worker(QThread):
 
     def run(self):
         try:
-            # Update progress: Start
             self.progress_update.emit(10)
-
-            # Convert to text
             convert_to_txt(self.contract_in)
             self.progress_update.emit(30)
 
-            # Flag problem language
             flag_problem_language(TNC_MATRIX_PATH)
             self.progress_update.emit(50)
 
-            # Convert back to docx
             back_to_docx = 'flagged_contract_to_txt.txt'
             file_to_highlight = 'flagged_contract_to_docx.docx'
             txt_to_docx(back_to_docx, file_to_highlight)
             self.progress_update.emit(70)
 
-            # Annotate contract
             annotate_contract(FAR_CLAUSE_MATRIX_PATH, file_to_highlight, self.output_filepath)
             self.progress_update.emit(90)
 
-            # Finalize
             self.progress_update.emit(100)
-
-            # Signal that analysis is complete
             self.analysis_complete.emit(self.output_filepath)
         except Exception as e:
             import traceback
             error_message = f"An error occurred during analysis:\n{traceback.format_exc()}"
             self.error_occurred.emit(error_message)
 
+
 class ContractReviewApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('AI Contract Review Tool')
         self.resize(800, 600)
+
+        # Initialize settings
+        self.settings = QSettings('MyCompany', 'ContractReviewApp')
         self.initUI()
+
+        # Apply saved theme
+        self.apply_theme(self.settings.value('theme', 'light'))
 
     def initUI(self):
         # Set the overall font
         self.setFont(QFont('Arial', 10))
 
-        # Set the main window background color
-        self.setStyleSheet("background-color: #F5F5F5;")
-
         # Layouts
         self.layout = QVBoxLayout()
+
+        # Add Menu Bar
+        self.menu_bar = QMenuBar(self)
+        self.settings_menu = self.menu_bar.addMenu("Settings")
+
+        # Theme toggle action
+        self.theme_action = QAction("Toggle Dark/Light Theme", self)
+        self.theme_action.triggered.connect(self.toggle_theme)
+        self.settings_menu.addAction(self.theme_action)
+
+        # Set default output directory
+        self.default_output_action = QAction("Set Default Output Directory", self)
+        self.default_output_action.triggered.connect(self.set_default_output_directory)
+        self.settings_menu.addAction(self.default_output_action)
+
+        # Reset settings action
+        self.reset_settings_action = QAction("Reset Settings to Default", self)
+        self.reset_settings_action.triggered.connect(self.reset_settings)
+        self.settings_menu.addAction(self.reset_settings_action)
+
+        # Add the menu bar to the layout
+        self.layout.setMenuBar(self.menu_bar)
 
         # Auburn University logo (ensure the path is correct)
         logo_path = os.path.join('supplementary_files', 'logos', 'au_logo_fullcolor_blue.png')
@@ -113,14 +132,14 @@ class ContractReviewApp(QWidget):
         self.upload_btn.setIcon(qta.icon('fa.folder-open', color='white'))
         self.upload_btn.setStyleSheet("""
             QPushButton {
-                background-color: #0C2340;  /* Navy Blue */
+                background-color: #0C2340;
                 color: white;
                 font-weight: bold;
                 padding: 10px;
                 border-radius: 5px;
             }
             QPushButton:hover {
-                background-color: #E87722;  /* Burnt Orange */
+                background-color: #E87722;
             }
         """)
 
@@ -169,10 +188,13 @@ class ContractReviewApp(QWidget):
         self.contract_text.setReadOnly(True)
         self.contract_text.setPlaceholderText('Contract content will appear here.')
         self.contract_text.setStyleSheet("""
-            background-color: white;
-            border: 2px solid #0C2340;
-            border-radius: 5px;
-            padding: 10px;
+            QTextEdit {
+                background-color: white;
+                color: #000000;
+                border: 2px solid #0C2340;
+                border-radius: 5px;
+                padding: 10px;
+            }
         """)
 
         self.message_label = QLabel('')
@@ -205,6 +227,115 @@ class ContractReviewApp(QWidget):
         self.layout.setContentsMargins(20, 20, 20, 20)
 
         self.setLayout(self.layout)
+
+    def toggle_theme(self):
+        current_theme = self.settings.value('theme', 'light')
+        new_theme = 'dark' if current_theme == 'light' else 'light'
+        self.apply_theme(new_theme)
+        self.settings.setValue('theme', new_theme)
+
+    def apply_theme(self, theme):
+        if theme == 'dark':
+            self.setStyleSheet("""
+                QWidget {
+                    background-color: #2E2E2E;
+                    color: #FFFFFF;
+                }
+                QPushButton {
+                    background-color: #4A4A4A;
+                    color: #FFFFFF;
+                    border: 1px solid #FFFFFF;
+                }
+                QPushButton:hover {
+                    background-color: #666666;
+                }
+                QTextEdit {
+                    background-color: #3E3E3E;
+                    color: #FFFFFF;
+                    border: 1px solid #FFFFFF;
+                }
+                QLabel {
+                    color: #FFFFFF;
+                }
+                QProgressBar {
+                    border: 2px solid #FFFFFF;
+                    border-radius: 5px;
+                    text-align: center;
+                }
+                QProgressBar::chunk {
+                    background-color: #E87722;
+                    width: 20px;
+                }
+            """)
+            # Adjust specific widgets if needed
+            self.contract_text.setStyleSheet("""
+                QTextEdit {
+                    background-color: #3E3E3E;
+                    color: #FFFFFF;
+                    border: 2px solid #FFFFFF;
+                    border-radius: 5px;
+                    padding: 10px;
+                }
+            """)
+            self.message_label.setStyleSheet("color: #FFFFFF; font-weight: bold;")
+        else:
+            self.setStyleSheet("""
+                QWidget {
+                    background-color: #F5F5F5;
+                    color: #000000;
+                }
+                QPushButton {
+                    background-color: #0C2340;
+                    color: white;
+                    font-weight: bold;
+                    padding: 10px;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #E87722;
+                }
+                QTextEdit {
+                    background-color: white;
+                    color: #000000;
+                    border: 2px solid #0C2340;
+                    border-radius: 5px;
+                    padding: 10px;
+                }
+                QLabel {
+                    color: #0C2340;
+                }
+                QProgressBar {
+                    border: 2px solid #0C2340;
+                    border-radius: 5px;
+                    text-align: center;
+                }
+                QProgressBar::chunk {
+                    background-color: #E87722;
+                    width: 20px;
+                }
+            """)
+            # Adjust specific widgets if needed
+            self.contract_text.setStyleSheet("""
+                QTextEdit {
+                    background-color: white;
+                    color: #000000;
+                    border: 2px solid #0C2340;
+                    border-radius: 5px;
+                    padding: 10px;
+                }
+            """)
+            self.message_label.setStyleSheet("color: #0C2340; font-weight: bold;")
+
+    def set_default_output_directory(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Default Output Directory")
+        if directory:
+            self.settings.setValue('default_output_directory', directory)
+            QMessageBox.information(self, "Settings Saved", f"Default output directory set to:\n{directory}")
+
+    def reset_settings(self):
+        self.settings.clear()
+        self.apply_theme('light')
+        QMessageBox.information(self, "Settings Reset", "Settings have been reset to default values.")
 
     def open_file_dialog(self):
         options = QFileDialog.Options()
@@ -245,10 +376,13 @@ class ContractReviewApp(QWidget):
 
     def read_pdf(self, pdf_path):
         try:
+            from PyPDF2 import PdfReader  # Ensure PyPDF2 is installed
             pdf_reader = PdfReader(pdf_path)
             pdf_text = ''
             for page in pdf_reader.pages:
-                pdf_text += page.extract_text()
+                text = page.extract_text()
+                if text:
+                    pdf_text += text
             return pdf_text
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to read PDF file: {e}")
@@ -257,14 +391,18 @@ class ContractReviewApp(QWidget):
     def analyze_contract(self):
         if hasattr(self, 'contract_path') and self.contract_path:
             try:
-                # Prompt user to select save location
+                # Retrieve default output directory from settings
+                default_output_dir = self.settings.value('default_output_directory', os.path.dirname(self.contract_path))
+                default_save_name = os.path.splitext(os.path.basename(self.contract_path))[0] + '_scanned.docx'
+                default_save_path = os.path.join(default_output_dir, default_save_name)
+
+                # Prompt user to select save location with default directory
                 options = QFileDialog.Options()
                 options |= QFileDialog.DontUseNativeDialog
-                default_save_name = os.path.splitext(os.path.basename(self.contract_path))[0] + '_scanned.docx'
                 save_filepath, _ = QFileDialog.getSaveFileName(
                     self,
                     "Save Analyzed Contract As",
-                    os.path.join(os.path.dirname(self.contract_path), default_save_name),
+                    default_save_path,
                     "Word Documents (*.docx);;All Files (*)",
                     options=options
                 )
@@ -351,6 +489,7 @@ class ContractReviewApp(QWidget):
                 QMessageBox.warning(self, "Error", f"Failed to open the file: {e}")
         else:
             QMessageBox.warning(self, "File Not Found", "The output file does not exist.")
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
